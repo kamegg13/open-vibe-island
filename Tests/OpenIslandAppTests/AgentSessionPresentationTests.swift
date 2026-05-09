@@ -99,35 +99,33 @@ struct AgentSessionPresentationTests {
     }
 
     @Test
-    func completionReplyRecipientUsesSessionToolName() {
-        let codex = AgentSession(
-            id: "codex-session",
-            title: "Codex · worktree",
-            tool: .codex,
-            phase: .completed,
-            summary: "Ready",
-            updatedAt: .now
-        )
-        let claude = AgentSession(
-            id: "claude-session",
-            title: "Claude · worktree",
-            tool: .claudeCode,
-            phase: .completed,
-            summary: "Ready",
-            updatedAt: .now
-        )
-        let gemini = AgentSession(
-            id: "gemini-session",
-            title: "Gemini CLI · worktree",
-            tool: .geminiCLI,
-            phase: .completed,
-            summary: "Ready",
-            updatedAt: .now
-        )
+    func completionReplyRecipientCoversEveryAgentTool() {
+        let expectedNames: [(AgentTool, String)] = [
+            (.claudeCode, "Claude"),
+            (.codex, "Codex"),
+            (.geminiCLI, "Gemini"),
+            (.openCode, "OpenCode"),
+            (.qoder, "Qoder"),
+            (.qwenCode, "Qwen Code"),
+            (.factory, "Factory"),
+            (.codebuddy, "CodeBuddy"),
+            (.cursor, "Cursor"),
+            (.kimiCLI, "Kimi"),
+        ]
+        #expect(expectedNames.map { $0.0.rawValue }.sorted() == AgentTool.allCases.map(\.rawValue).sorted())
 
-        #expect(codex.completionReplyRecipientName == "Codex")
-        #expect(claude.completionReplyRecipientName == "Claude")
-        #expect(gemini.completionReplyRecipientName == "Gemini")
+        for (tool, expectedName) in expectedNames {
+            let session = AgentSession(
+                id: "\(tool.rawValue)-session",
+                title: "\(expectedName) · worktree",
+                tool: tool,
+                phase: .completed,
+                summary: "Ready",
+                updatedAt: .now
+            )
+
+            #expect(session.completionReplyRecipientName == expectedName)
+        }
     }
 
     @Test
