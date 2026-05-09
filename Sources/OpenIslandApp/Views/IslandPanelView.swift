@@ -76,9 +76,6 @@ extension AgentSession {
 private let openAnimation = Animation.spring(response: 0.42, dampingFraction: 0.8, blendDuration: 0)
 private let closeAnimation = Animation.smooth(duration: 0.3)
 private let popAnimation = Animation.spring(response: 0.3, dampingFraction: 0.5)
-private let openedContentFadeAnimation = Animation.easeOut(duration: 0.14)
-private let openedContentRevealDelay: TimeInterval = 0.16
-private let closeContentHideLeadTime: TimeInterval = 0.035
 
 private struct ConditionalDrawingGroup: ViewModifier {
     let enabled: Bool
@@ -108,12 +105,9 @@ struct IslandPanelView: View {
 
     @State private var isHovering = false
     @State private var showingQuitConfirmation = false
-    @State private var renderedNotchStatus: NotchStatus = .closed
-    @State private var showsOpenedContent = false
-    @State private var renderedTransitionGeneration: UInt64 = 0
 
     private var isOpened: Bool {
-        renderedNotchStatus == .opened
+        model.notchStatus == .opened
     }
 
     private var usesOpenedVisualState: Bool {
@@ -121,12 +115,12 @@ struct IslandPanelView: View {
     }
 
     private var isPopping: Bool {
-        renderedNotchStatus == .popping
+        model.notchStatus == .popping
     }
 
     /// Single animation selection based on the current notch status.
     private var notchTransitionAnimation: Animation {
-        switch renderedNotchStatus {
+        switch model.notchStatus {
         case .opened:  return openAnimation
         case .closed:  return closeAnimation
         case .popping: return popAnimation
@@ -186,12 +180,6 @@ struct IslandPanelView: View {
         } message: {
             Text(model.lang.t("island.quit.confirmMessage"))
         }
-        .onAppear {
-            syncRenderedNotchStatus(with: model.notchStatus, immediate: true)
-        }
-        .onChange(of: model.notchStatus) { _, status in
-            syncRenderedNotchStatus(with: status)
-        }
     }
 
     @ViewBuilder
@@ -209,20 +197,20 @@ struct IslandPanelView: View {
 
         VStack(spacing: 0) {
             ZStack(alignment: .top) {
-                if usesOpenedVisualState {
-                    openedSurface(width: openedWidth, height: openedHeight)
-                        .transition(.opacity)
-                } else {
-                    v6ClosedSurface()
-                        .transition(.opacity)
-                }
+                openedSurface(width: openedWidth, height: openedHeight)
+                    .opacity(usesOpenedVisualState ? 1 : 0)
+                    .allowsHitTesting(usesOpenedVisualState)
+
+                v6ClosedSurface()
+                    .opacity(usesOpenedVisualState ? 0 : 1)
+                    .allowsHitTesting(!usesOpenedVisualState)
             }
             .frame(maxWidth: .infinity, alignment: .top)
         }
         .scaleEffect(usesOpenedVisualState ? 1 : (isHovering ? IslandChromeMetrics.closedHoverScale : 1), anchor: .top)
         .padding(.horizontal, panelShadowHorizontalInset)
         .padding(.bottom, panelShadowBottomInset)
-        .animation(notchTransitionAnimation, value: renderedNotchStatus)
+        .animation(notchTransitionAnimation, value: model.notchStatus)
         .contentShape(Rectangle())
         .onHover { hovering in
             withAnimation(.spring(response: 0.38, dampingFraction: 0.8)) {
@@ -233,48 +221,6 @@ struct IslandPanelView: View {
             if model.notchStatus != .opened {
                 model.notchOpen(reason: .click)
             }
-        }
-    }
-
-    private func syncRenderedNotchStatus(with status: NotchStatus, immediate: Bool = false) {
-        renderedTransitionGeneration &+= 1
-        let generation = renderedTransitionGeneration
-
-        if immediate {
-            renderedNotchStatus = status
-            showsOpenedContent = status == .opened
-            return
-        }
-
-        switch status {
-        case .opened:
-            showsOpenedContent = false
-            renderedNotchStatus = .opened
-
-            DispatchQueue.main.asyncAfter(deadline: .now() + openedContentRevealDelay) {
-                guard renderedTransitionGeneration == generation,
-                      model.notchStatus == .opened else {
-                    return
-                }
-                withAnimation(openedContentFadeAnimation) {
-                    showsOpenedContent = true
-                }
-            }
-
-        case .closed:
-            showsOpenedContent = false
-
-            DispatchQueue.main.asyncAfter(deadline: .now() + closeContentHideLeadTime) {
-                guard renderedTransitionGeneration == generation,
-                      model.notchStatus == .closed else {
-                    return
-                }
-                renderedNotchStatus = .closed
-            }
-
-        case .popping:
-            showsOpenedContent = false
-            renderedNotchStatus = .popping
         }
     }
 
@@ -323,7 +269,7 @@ struct IslandPanelView: View {
                 openedHeaderContent
                     .frame(height: closedNotchHeight)
 
-                openedContentContainer
+                openedContent
                     .frame(width: openedWidth)
                     .frame(maxHeight: max(0, openedHeight - closedNotchHeight), alignment: .top)
                     .clipped()
@@ -338,16 +284,6 @@ struct IslandPanelView: View {
             }
         }
         .frame(width: surfaceWidth, height: surfaceHeight, alignment: .top)
-    }
-
-    @ViewBuilder
-    private var openedContentContainer: some View {
-        if showsOpenedContent {
-            openedContent
-                .transition(.opacity)
-        } else {
-            Color.clear
-        }
     }
 
     // MARK: - Closed state
