@@ -43,6 +43,20 @@ public struct CodexHookFileMutation: Equatable, Sendable {
     }
 }
 
+public enum CodexHooksFeatureFlagKey: String, Equatable, Sendable {
+    case current = "hooks"
+    case legacy = "codex_hooks"
+
+    var alternate: CodexHooksFeatureFlagKey {
+        switch self {
+        case .current:
+            return .legacy
+        case .legacy:
+            return .current
+        }
+    }
+}
+
 public enum CodexHookInstallerError: Error, LocalizedError {
     case invalidHooksJSON
 
@@ -59,8 +73,8 @@ public enum CodexHookInstaller {
     public static let managedStatusMessage = "Managed by Open Island"
     public static let legacyManagedStatusMessage = "Managed by Vibe Island"
     public static let managedTimeout = 45
-    private static let currentFeatureKey = "hooks"
-    private static let legacyFeatureKey = "codex_hooks"
+    private static let currentFeatureKey = CodexHooksFeatureFlagKey.current.rawValue
+    private static let legacyFeatureKey = CodexHooksFeatureFlagKey.legacy.rawValue
 
     // Keep the managed Codex install aligned with the original app's low-noise footprint.
     // The bridge still understands richer hook events, but we do not install them by default
@@ -141,12 +155,18 @@ public enum CodexHookInstaller {
     }
 
     /// Enables the current Codex hooks feature flag and migrates the legacy flag when present.
-    public static func enableCodexHooksFeature(in contents: String) -> CodexFeatureMutation {
+    public static func enableCodexHooksFeature(
+        in contents: String,
+        preferredKey: CodexHooksFeatureFlagKey = .current
+    ) -> CodexFeatureMutation {
         var lines = contents.components(separatedBy: "\n")
+        let featureKey = preferredKey.rawValue
+        let alternateFeatureKey = preferredKey.alternate.rawValue
 
-        if let hooksIndex = lineIndex(ofKey: currentFeatureKey, inSection: "features", lines: lines) {
-            if featureValue(for: currentFeatureKey, lines: lines) == true {
-                removeFeatureLine(legacyFeatureKey, from: &lines)
+        if let hooksIndex = lineIndex(ofKey: featureKey, inSection: "features", lines: lines) {
+            let alternateWasEnabled = featureValue(for: alternateFeatureKey, lines: lines) == true
+            if featureValue(for: featureKey, lines: lines) == true {
+                removeFeatureLine(alternateFeatureKey, from: &lines)
                 let updatedContents = lines.joined(separator: "\n")
                 return CodexFeatureMutation(
                     contents: updatedContents,
@@ -155,18 +175,18 @@ public enum CodexHookInstaller {
                 )
             }
 
-            lines[hooksIndex] = "\(currentFeatureKey) = true"
-            removeFeatureLine(legacyFeatureKey, from: &lines)
+            lines[hooksIndex] = "\(featureKey) = true"
+            removeFeatureLine(alternateFeatureKey, from: &lines)
             return CodexFeatureMutation(
                 contents: lines.joined(separator: "\n"),
                 changed: true,
-                featureEnabledByInstaller: true
+                featureEnabledByInstaller: !alternateWasEnabled
             )
         }
 
-        if let legacyHookIndex = lineIndex(ofKey: legacyFeatureKey, inSection: "features", lines: lines) {
-            let legacyWasEnabled = featureValue(for: legacyFeatureKey, lines: lines) == true
-            lines[legacyHookIndex] = "\(currentFeatureKey) = true"
+        if let legacyHookIndex = lineIndex(ofKey: alternateFeatureKey, inSection: "features", lines: lines) {
+            let legacyWasEnabled = featureValue(for: alternateFeatureKey, lines: lines) == true
+            lines[legacyHookIndex] = "\(featureKey) = true"
             return CodexFeatureMutation(
                 contents: lines.joined(separator: "\n"),
                 changed: true,
@@ -176,7 +196,7 @@ public enum CodexHookInstaller {
 
         if let featuresRange = sectionRange(named: "features", lines: lines) {
             let insertIndex = featuresRange.upperBound
-            lines.insert("\(currentFeatureKey) = true", at: insertIndex)
+            lines.insert("\(featureKey) = true", at: insertIndex)
             return CodexFeatureMutation(
                 contents: lines.joined(separator: "\n"),
                 changed: true,
@@ -188,7 +208,7 @@ public enum CodexHookInstaller {
             lines.append("")
         }
         lines.append("[features]")
-        lines.append("\(currentFeatureKey) = true")
+        lines.append("\(featureKey) = true")
 
         return CodexFeatureMutation(
             contents: lines.joined(separator: "\n"),
@@ -239,6 +259,20 @@ public enum CodexHookInstaller {
         let lines = contents.components(separatedBy: "\n")
         return featureValue(for: currentFeatureKey, lines: lines) == true
             || featureValue(for: legacyFeatureKey, lines: lines) == true
+    }
+
+    public static func preferredCodexHooksFeatureKey() -> CodexHooksFeatureFlagKey {
+        if let featureKey = commandOutput(arguments: ["features", "list"])
+            .flatMap(preferredCodexHooksFeatureKey(fromFeatureList:)) {
+            return featureKey
+        }
+
+        if let featureKey = commandOutput(arguments: ["--version"])
+            .flatMap(preferredCodexHooksFeatureKey(fromVersionOutput:)) {
+            return featureKey
+        }
+
+        return .legacy
     }
 
     private static func loadRootObject(from data: Data?) throws -> [String: Any] {
@@ -421,7 +455,7 @@ public enum CodexHookInstaller {
             return nil
         }
 
-        switch assignment.value {
+        switch assignment.value.lowercased() {
         case "true":
             return true
         case "false":
@@ -445,6 +479,88 @@ public enum CodexHookInstaller {
         }
 
         return (key: parts[0], value: parts[1])
+    }
+
+    static func preferredCodexHooksFeatureKey(fromFeatureList output: String) -> CodexHooksFeatureFlagKey? {
+        let featureNames = Set(output.split(whereSeparator: \.isNewline).compactMap { line -> String? in
+            line.split(whereSeparator: \.isWhitespace).first.map(String.init)
+        })
+
+        if featureNames.contains(currentFeatureKey) {
+            return .current
+        }
+        if featureNames.contains(legacyFeatureKey) {
+            return .legacy
+        }
+        return nil
+    }
+
+    static func preferredCodexHooksFeatureKey(fromVersionOutput output: String) -> CodexHooksFeatureFlagKey? {
+        guard let versionToken = output.split(whereSeparator: \.isWhitespace).first(where: { token in
+            token.first?.isNumber == true
+        }) else {
+            return nil
+        }
+
+        let components = versionToken.split(separator: ".").compactMap { Int($0) }
+        guard components.count >= 2 else {
+            return nil
+        }
+
+        let major = components[0]
+        let minor = components[1]
+        return major > 0 || minor >= 130 ? .current : .legacy
+    }
+
+    private static func commandOutput(arguments: [String]) -> String? {
+        for command in codexCommandCandidates() {
+            if let output = runCommand(
+                executableURL: command.executableURL,
+                arguments: command.prefixArguments + arguments
+            ) {
+                return output
+            }
+        }
+
+        return nil
+    }
+
+    private static func codexCommandCandidates() -> [(executableURL: URL, prefixArguments: [String])] {
+        var candidates: [(executableURL: URL, prefixArguments: [String])] = [
+            (URL(fileURLWithPath: "/usr/bin/env"), ["codex"]),
+        ]
+
+        for path in ["/opt/homebrew/bin/codex", "/usr/local/bin/codex"] {
+            if FileManager.default.isExecutableFile(atPath: path) {
+                candidates.append((URL(fileURLWithPath: path), []))
+            }
+        }
+
+        return candidates
+    }
+
+    private static func runCommand(executableURL: URL, arguments: [String]) -> String? {
+        let process = Process()
+        process.executableURL = executableURL
+        process.arguments = arguments
+
+        let output = Pipe()
+        process.standardOutput = output
+        process.standardError = Pipe()
+
+        do {
+            try process.run()
+            process.waitUntilExit()
+        } catch {
+            return nil
+        }
+
+        guard process.terminationStatus == 0 else {
+            return nil
+        }
+
+        let data = output.fileHandleForReading.readDataToEndOfFile()
+        return String(data: data, encoding: .utf8)
     }
 
     private static func shellQuote(_ string: String) -> String {

@@ -853,6 +853,21 @@ struct SessionStateTests {
     }
 
     @Test
+    func codexHookInstallerCanUseLegacyFeatureFlagForOlderCodex() {
+        let initialConfig = """
+        model = "gpt-5-codex"
+        """
+
+        let enabled = CodexHookInstaller.enableCodexHooksFeature(in: initialConfig, preferredKey: .legacy)
+        #expect(enabled.changed)
+        #expect(enabled.featureEnabledByInstaller)
+        #expect(enabled.contents.contains("[features]"))
+        let enabledLines = enabled.contents.components(separatedBy: "\n")
+        #expect(enabledLines.contains("codex_hooks = true"))
+        #expect(!enabledLines.contains("hooks = true"))
+    }
+
+    @Test
     func codexHookInstallerRemovesLegacyFlagWhenCurrentFlagExists() {
         let mixedConfig = """
         [features]
@@ -893,6 +908,23 @@ struct SessionStateTests {
         [features]
         hooks=false # disabled by user
         """))
+    }
+
+    @Test
+    func codexHookInstallerDetectsPreferredFeatureFlagFromCodexOutput() {
+        let currentFeatures = """
+        plugin_hooks  under development  false
+        hooks         stable             true
+        """
+        let legacyFeatures = """
+        codex_hooks   stable             true
+        shell_tool    stable             true
+        """
+
+        #expect(CodexHookInstaller.preferredCodexHooksFeatureKey(fromFeatureList: currentFeatures) == .current)
+        #expect(CodexHookInstaller.preferredCodexHooksFeatureKey(fromFeatureList: legacyFeatures) == .legacy)
+        #expect(CodexHookInstaller.preferredCodexHooksFeatureKey(fromVersionOutput: "codex-cli 0.130.0") == .current)
+        #expect(CodexHookInstaller.preferredCodexHooksFeatureKey(fromVersionOutput: "codex-cli 0.129.0") == .legacy)
     }
 
     @Test
