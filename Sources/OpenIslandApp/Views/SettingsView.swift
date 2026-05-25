@@ -339,6 +339,20 @@ struct AboutSettingsPane: View {
             Form {
                 Section {
                     aboutActionRow(
+                        title: lang.t("settings.about.checkForUpdates"),
+                        systemImage: "arrow.up.circle",
+                        tint: primaryInk,
+                        action: {
+                            if let url = URL(string: "https://github.com/kamegg13/open-vibe-island/releases/latest") {
+                                NSWorkspace.shared.open(url)
+                            }
+                        }
+                    )
+                    .accessibilityIdentifier("settings.about.checkForUpdates")
+                }
+
+                Section {
+                    aboutActionRow(
                         title: lang.t("settings.about.quitApp"),
                         systemImage: "rectangle.portrait.and.arrow.right",
                         tint: Color(red: 1.0, green: 0.29, blue: 0.29),

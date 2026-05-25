@@ -21,6 +21,7 @@ final class WorkSafeBuildSurfaceTests: XCTestCase {
     func testRemovedRuntimeSurfacesStayOutOfTheBuild() throws {
         let package = try contents("Package.swift")
         let appModel = try contents("Sources/OpenIslandApp/AppModel.swift")
+        let settingsView = try contents("Sources/OpenIslandApp/Views/SettingsView.swift")
         let hookCoordinator = try contents("Sources/OpenIslandApp/HookInstallationCoordinator.swift")
 
         XCTAssertTrue(package.contains(#""WatchHTTPEndpoint.swift""#), "Watch/LAN endpoint must be explicitly excluded from the target.")
@@ -32,6 +33,8 @@ final class WorkSafeBuildSurfaceTests: XCTestCase {
         XCTAssertFalse(appModel.contains("updateChecker"), "Network update checks must not run at startup.")
         XCTAssertFalse(appModel.contains("scheduleOpenCodeSessionPersistence"), "OpenCode session persistence must not run in the work-safe app.")
         XCTAssertFalse(appModel.contains("scheduleCursorSessionPersistence"), "Cursor session persistence must not run in the work-safe app.")
+        XCTAssertTrue(settingsView.contains("https://github.com/kamegg13/open-vibe-island/releases/latest"), "Manual update checks must point at the user's fork.")
+        XCTAssertFalse(settingsView.contains("https://github.com/Octane0411/open-vibe-island/releases/latest"), "Manual update checks must not point at the upstream repository.")
         XCTAssertFalse(hookCoordinator.contains("OpenCodePluginInstallationManager"), "OpenCode plugin installer must not be reachable.")
         XCTAssertFalse(hookCoordinator.contains("CursorHookInstallationManager"), "Cursor hook installer must not be reachable.")
         XCTAssertFalse(hookCoordinator.contains("GeminiHookInstallationManager"), "Gemini hook installer must not be reachable.")
