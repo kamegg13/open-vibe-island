@@ -31,6 +31,13 @@ let package = Package(
         .target(
             name: "OpenIslandCore",
             exclude: [
+                "CursorHookInstallationManager.swift",
+                "CursorHookInstaller.swift",
+                "GeminiHookInstallationManager.swift",
+                "GeminiHookInstaller.swift",
+                "KimiHookInstallationManager.swift",
+                "KimiHookInstaller.swift",
+                "OpenCodePluginInstallationManager.swift",
                 "WatchHTTPEndpoint.swift",
                 "WatchNotificationRelay.swift",
             ]
@@ -60,6 +67,9 @@ let package = Package(
             name: "OpenIslandCoreTests",
             dependencies: ["OpenIslandCore"],
             exclude: [
+                "CursorHooksTests.swift",
+                "GeminiHooksTests.swift",
+                "KimiHooksTests.swift",
                 "WatchNotificationRelayTests.swift",
             ]
         ),

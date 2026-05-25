@@ -19,11 +19,6 @@ final class HookInstallationCoordinator {
     var qwenCodeHookStatus: ClaudeHookInstallationStatus?
     var factoryHookStatus: ClaudeHookInstallationStatus?
     var codebuddyHookStatus: ClaudeHookInstallationStatus?
-    var openCodePluginStatus: OpenCodePluginInstallationStatus?
-    var cursorHookStatus: CursorHookInstallationStatus?
-    var geminiHookStatus: GeminiHookInstallationStatus?
-    var kimiHookStatus: KimiHookInstallationStatus?
-
     var isCodexSetupBusy = false
     var isClaudeHookSetupBusy = false
     var isClaudeUsageSetupBusy = false
@@ -73,15 +68,6 @@ final class HookInstallationCoordinator {
     var codexHooksInstalled: Bool { codexHookStatus?.managedHooksPresent == true }
     var claudeHooksInstalled: Bool { claudeHookStatus?.managedHooksPresent == true }
     var claudeUsageInstalled: Bool { claudeStatusLineStatus?.managedStatusLineInstalled == true }
-
-    var qoderHooksInstalled: Bool { false }
-    var qwenCodeHooksInstalled: Bool { false }
-    var factoryHooksInstalled: Bool { false }
-    var codebuddyHooksInstalled: Bool { false }
-    var openCodePluginInstalled: Bool { false }
-    var cursorHooksInstalled: Bool { false }
-    var geminiHooksInstalled: Bool { false }
-    var kimiHooksInstalled: Bool { false }
 
     var codexHookStatusTitle: String {
         codexHooksInstalled ? "Codex hooks installed" : "Codex hooks not installed"
@@ -171,15 +157,6 @@ final class HookInstallationCoordinator {
         }
         return components.isEmpty ? nil : components.joined(separator: " · ")
     }
-
-    var openCodePluginStatusTitle: String { "OpenCode disabled in work-safe build" }
-    var openCodePluginStatusSummary: String { "Only Codex and Claude integrations are enabled." }
-    var cursorHookStatusTitle: String { "Cursor disabled in work-safe build" }
-    var cursorHookStatusSummary: String { "Only Codex and Claude integrations are enabled." }
-    var geminiHookStatusTitle: String { "Gemini disabled in work-safe build" }
-    var geminiHookStatusSummary: String { "Only Codex and Claude integrations are enabled." }
-    var kimiHookStatusTitle: String { "Kimi disabled in work-safe build" }
-    var kimiHookStatusSummary: String { "Only Codex and Claude integrations are enabled." }
 
     func updateClaudeConfigDirectory(to newDirectory: URL?) {
         ClaudeConfigDirectory.customDirectory = newDirectory
@@ -287,11 +264,6 @@ final class HookInstallationCoordinator {
     }
 
     func refreshCCForkHookStatuses() {}
-    func refreshOpenCodePluginStatus() {}
-    func refreshCursorHookStatus() {}
-    func refreshGeminiHookStatus() {}
-    func refreshKimiHookStatus() {}
-
     func installCodexHooks() {
         guard let hooksBinaryURL else {
             onStatusMessage?("Build OpenIslandHooks before installing Codex hooks.")
@@ -427,25 +399,4 @@ final class HookInstallationCoordinator {
         }
     }
 
-    func installQoderHooks() { markUnsupported(.qoder) }
-    func uninstallQoderHooks() { markUnsupported(.qoder) }
-    func installQwenCodeHooks() { markUnsupported(.qwenCode) }
-    func uninstallQwenCodeHooks() { markUnsupported(.qwenCode) }
-    func installFactoryHooks() { markUnsupported(.factory) }
-    func uninstallFactoryHooks() { markUnsupported(.factory) }
-    func installCodebuddyHooks() { markUnsupported(.codebuddy) }
-    func uninstallCodebuddyHooks() { markUnsupported(.codebuddy) }
-    func installOpenCodePlugin() { markUnsupported(.openCode) }
-    func uninstallOpenCodePlugin() { markUnsupported(.openCode) }
-    func installCursorHooks() { markUnsupported(.cursor) }
-    func uninstallCursorHooks() { markUnsupported(.cursor) }
-    func installGeminiHooks() { markUnsupported(.gemini) }
-    func uninstallGeminiHooks() { markUnsupported(.gemini) }
-    func installKimiHooks() { markUnsupported(.kimi) }
-    func uninstallKimiHooks() { markUnsupported(.kimi) }
-
-    private func markUnsupported(_ agent: AgentIdentifier) {
-        intentStore.setIntent(.uninstalled, for: agent)
-        onStatusMessage?("This work-safe build only supports Codex and Claude.")
-    }
 }
