@@ -55,6 +55,8 @@ final class WorkSafeBuildSurfaceTests: XCTestCase {
         XCTAssertFalse(hookCoordinator.contains("CursorHookInstallationManager"), "Cursor hook installer must not be reachable.")
         XCTAssertFalse(hookCoordinator.contains("GeminiHookInstallationManager"), "Gemini hook installer must not be reachable.")
         XCTAssertFalse(hookCoordinator.contains("KimiHookInstallationManager"), "Kimi hook installer must not be reachable.")
+        XCTAssertTrue(hookCoordinator.contains("installAsWrapper()"), "Claude Usage Bridge install must preserve existing custom statusLine commands.")
+        XCTAssertTrue(hookCoordinator.contains("existingStatusLineConflict"), "Claude Usage Bridge install must fall back to wrapper mode on custom statusLine conflicts.")
         XCTAssertFalse(hookCLI.contains("case cursor"), "Hook helper must not accept Cursor events in the work-safe app.")
         XCTAssertFalse(hookCLI.contains("case gemini"), "Hook helper must not accept Gemini events in the work-safe app.")
         XCTAssertFalse(hookCLI.contains("case kimi"), "Hook helper must not accept Kimi events in the work-safe app.")

@@ -340,7 +340,11 @@ final class HookInstallationCoordinator {
             guard let self else { return }
             defer { self.isClaudeUsageSetupBusy = false }
             do {
-                self.claudeStatusLineStatus = try self.claudeStatusLineInstallation.install()
+                do {
+                    self.claudeStatusLineStatus = try self.claudeStatusLineInstallation.install()
+                } catch ClaudeStatusLineInstallationError.existingStatusLineConflict {
+                    self.claudeStatusLineStatus = try self.claudeStatusLineInstallation.installAsWrapper()
+                }
                 self.intentStore.setIntent(.installed, for: .claudeUsageBridge)
                 self.refreshClaudeUsageState()
                 self.onStatusMessage?("Installed Claude usage bridge.")
