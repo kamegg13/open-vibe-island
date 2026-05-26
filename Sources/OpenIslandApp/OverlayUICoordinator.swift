@@ -27,6 +27,16 @@ final class OverlayUICoordinator {
         }
     }
 
+    var overlayLayoutModePreference: OverlayLayoutModePreference = .automatic {
+        didSet {
+            guard overlayLayoutModePreference != oldValue else {
+                return
+            }
+            UserDefaults.standard.set(overlayLayoutModePreference.rawValue, forKey: "overlay.layoutMode.preference")
+            refreshOverlayPlacement()
+        }
+    }
+
     @ObservationIgnored
     weak var appModel: AppModel?
 
@@ -82,8 +92,13 @@ final class OverlayUICoordinator {
 
     private var preferredOverlayScreenID: String? {
         overlayDisplaySelectionID == OverlayDisplayOption.automaticID
+            || overlayDisplaySelectionID == OverlayDisplayOption.allDisplaysID
             ? nil
             : overlayDisplaySelectionID
+    }
+
+    private var showsOverlayOnAllDisplays: Bool {
+        overlayDisplaySelectionID == OverlayDisplayOption.allDisplaysID
     }
 
     // MARK: - Initialization
@@ -92,6 +107,12 @@ final class OverlayUICoordinator {
         overlayDisplaySelectionID = UserDefaults.standard.string(
             forKey: "overlay.display.preference"
         ) ?? OverlayDisplayOption.automaticID
+    }
+
+    func restoreLayoutModePreference() {
+        overlayLayoutModePreference = OverlayLayoutModePreference(
+            rawValue: UserDefaults.standard.string(forKey: "overlay.layoutMode.preference") ?? ""
+        ) ?? .automatic
     }
 
     // MARK: - Overlay transitions
@@ -119,7 +140,7 @@ final class OverlayUICoordinator {
             },
             onPlacementResolved: { [weak self] in
                 guard let self, let overlayPlacementDiagnostics else { return }
-                self.onStatusMessage?("Overlay showing on \(overlayPlacementDiagnostics.targetScreenName) as \(overlayPlacementDiagnostics.modeDescription.lowercased()).")
+                self.onStatusMessage?("Overlay showing on \(overlayPlacementDiagnostics.targetDescription) as \(overlayPlacementDiagnostics.modeDescription.lowercased()).")
             }
         )
     }
@@ -175,7 +196,9 @@ final class OverlayUICoordinator {
         if status == .opened, let appModel {
             overlayPlacementDiagnostics = overlayPanelController.show(
                 model: appModel,
-                preferredScreenID: preferredOverlayScreenID
+                preferredScreenID: preferredOverlayScreenID,
+                showsOnAllDisplays: showsOverlayOnAllDisplays,
+                layoutModePreference: overlayLayoutModePreference
             )
         }
 
@@ -206,7 +229,12 @@ final class OverlayUICoordinator {
 
     func ensureOverlayPanel() {
         guard let appModel else { return }
-        overlayPanelController.ensurePanel(model: appModel, preferredScreenID: preferredOverlayScreenID)
+        overlayPanelController.ensurePanel(
+            model: appModel,
+            preferredScreenID: preferredOverlayScreenID,
+            showsOnAllDisplays: showsOverlayOnAllDisplays,
+            layoutModePreference: overlayLayoutModePreference
+        )
     }
 
     // Legacy compatibility
@@ -243,7 +271,9 @@ final class OverlayUICoordinator {
 
     func refreshOverlayPlacement() {
         overlayPlacementDiagnostics = overlayPanelController.reposition(
-            preferredScreenID: preferredOverlayScreenID
+            preferredScreenID: preferredOverlayScreenID,
+            showsOnAllDisplays: showsOverlayOnAllDisplays,
+            layoutModePreference: overlayLayoutModePreference
         )
     }
 
@@ -466,7 +496,9 @@ final class OverlayUICoordinator {
             case .opened:
                 self.overlayPlacementDiagnostics = self.overlayPanelController.show(
                     model: appModel,
-                    preferredScreenID: self.preferredOverlayScreenID
+                    preferredScreenID: self.preferredOverlayScreenID,
+                    showsOnAllDisplays: self.showsOverlayOnAllDisplays,
+                    layoutModePreference: self.overlayLayoutModePreference
                 )
             case .closed, .popping:
                 self.refreshOverlayPlacement()

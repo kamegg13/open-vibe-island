@@ -32,6 +32,7 @@ final class OverlayPanelController {
     private static let completionCardMaxHeight: CGFloat = 400
 
     private var panel: NotchPanel?
+    private var secondaryPanels: [String: NotchPanel] = [:]
     private var eventMonitors = NotchEventMonitors()
     private var hoverTimer: DispatchWorkItem?
     private var hoverCancelGrace: DispatchWorkItem?
@@ -50,25 +51,62 @@ final class OverlayPanelController {
         OverlayDisplayResolver.availableDisplayOptions()
     }
 
-    func ensurePanel(model: AppModel, preferredScreenID: String?) {
+    func ensurePanel(
+        model: AppModel,
+        preferredScreenID: String?,
+        showsOnAllDisplays: Bool,
+        layoutModePreference: OverlayLayoutModePreference
+    ) {
         self.model = model
         let panel = self.panel ?? makePanel(model: model)
         self.panel = panel
-        positionPanel(panel, preferredScreenID: preferredScreenID, animated: false)
+        positionPanel(
+            panel,
+            preferredScreenID: preferredScreenID,
+            layoutModePreference: layoutModePreference,
+            animated: false
+        )
+        syncSecondaryPanels(
+            model: model,
+            preferredScreenID: preferredScreenID,
+            showsOnAllDisplays: showsOnAllDisplays,
+            layoutModePreference: layoutModePreference
+        )
         panel.orderFrontRegardless()
         panel.ignoresMouseEvents = true
         panel.acceptsMouseMovedEvents = false
         startEventMonitoring()
     }
 
-    func show(model: AppModel, preferredScreenID: String?) -> OverlayPlacementDiagnostics? {
+    func show(
+        model: AppModel,
+        preferredScreenID: String?,
+        showsOnAllDisplays: Bool,
+        layoutModePreference: OverlayLayoutModePreference
+    ) -> OverlayPlacementDiagnostics? {
         self.model = model
         let panel = self.panel ?? makePanel(model: model)
         self.panel = panel
-        let diagnostics = positionPanel(panel, preferredScreenID: preferredScreenID, animated: true)
+        let diagnostics = positionPanel(
+            panel,
+            preferredScreenID: preferredScreenID,
+            layoutModePreference: layoutModePreference,
+            animated: true
+        )
+        syncSecondaryPanels(
+            model: model,
+            preferredScreenID: preferredScreenID,
+            showsOnAllDisplays: showsOnAllDisplays,
+            layoutModePreference: layoutModePreference
+        )
         presentPanel(panel, activates: Self.shouldActivatePanel(for: model.notchOpenReason))
         panel.ignoresMouseEvents = false
         panel.acceptsMouseMovedEvents = true
+        for secondaryPanel in secondaryPanels.values {
+            presentPanel(secondaryPanel, activates: false)
+            secondaryPanel.ignoresMouseEvents = false
+            secondaryPanel.acceptsMouseMovedEvents = true
+        }
         startEventMonitoring()
         return diagnostics
     }
@@ -76,6 +114,10 @@ final class OverlayPanelController {
     func hide() {
         panel?.ignoresMouseEvents = true
         panel?.acceptsMouseMovedEvents = false
+        for secondaryPanel in secondaryPanels.values {
+            secondaryPanel.ignoresMouseEvents = true
+            secondaryPanel.acceptsMouseMovedEvents = false
+        }
     }
 
     func setInteractive(_ interactive: Bool) {
@@ -85,30 +127,67 @@ final class OverlayPanelController {
 
         panel.ignoresMouseEvents = !interactive
         panel.acceptsMouseMovedEvents = interactive
+        for secondaryPanel in secondaryPanels.values {
+            secondaryPanel.ignoresMouseEvents = !interactive
+            secondaryPanel.acceptsMouseMovedEvents = interactive
+        }
 
         if interactive {
             presentPanel(panel, activates: Self.shouldActivatePanel(for: model?.notchOpenReason))
+            for secondaryPanel in secondaryPanels.values {
+                presentPanel(secondaryPanel, activates: false)
+            }
         }
     }
 
-    func reposition(preferredScreenID: String?) -> OverlayPlacementDiagnostics? {
+    func reposition(
+        preferredScreenID: String?,
+        showsOnAllDisplays: Bool,
+        layoutModePreference: OverlayLayoutModePreference
+    ) -> OverlayPlacementDiagnostics? {
         guard let panel else {
-            return placementDiagnostics(preferredScreenID: preferredScreenID)
+            return placementDiagnostics(
+                preferredScreenID: preferredScreenID,
+                layoutModePreference: layoutModePreference
+            )
         }
 
-        return positionPanel(panel, preferredScreenID: preferredScreenID, animated: true)
+        let diagnostics = positionPanel(
+            panel,
+            preferredScreenID: preferredScreenID,
+            layoutModePreference: layoutModePreference,
+            animated: true
+        )
+        if let model {
+            syncSecondaryPanels(
+                model: model,
+                preferredScreenID: preferredScreenID,
+                showsOnAllDisplays: showsOnAllDisplays,
+                layoutModePreference: layoutModePreference
+            )
+        }
+        return diagnostics
     }
 
-    func placementDiagnostics(preferredScreenID: String?) -> OverlayPlacementDiagnostics? {
+    func placementDiagnostics(
+        preferredScreenID: String?,
+        layoutModePreference: OverlayLayoutModePreference = .automatic
+    ) -> OverlayPlacementDiagnostics? {
         let panelSize = panel?.frame.size ?? OverlayDisplayResolver.defaultPanelSize
-        return OverlayDisplayResolver.diagnostics(preferredScreenID: preferredScreenID, panelSize: panelSize)
+        return OverlayDisplayResolver.diagnostics(
+            preferredScreenID: preferredScreenID,
+            panelSize: panelSize,
+            layoutModePreference: layoutModePreference
+        )
     }
 
     // MARK: - Panel creation
 
-    private func makePanel(model: AppModel) -> NotchPanel {
+    private func makePanel(model: AppModel, displayOverrideScreenID: String? = nil) -> NotchPanel {
         let screen = resolveTargetScreen() ?? NSScreen.main
-        let windowFrame = screen.map { panelFrame(for: model, on: $0) } ?? .zero
+        let windowFrame = screen.map {
+            panelFrame(for: model, on: $0, layoutModePreference: model.overlayLayoutModePreference)
+        } ?? .zero
 
         let panel = NotchPanel(
             contentRect: windowFrame,
@@ -138,11 +217,16 @@ final class OverlayPanelController {
         panel.titlebarAppearsTransparent = true
         panel.ignoresMouseEvents = true
 
-        let hostingView = NotchHostingView(rootView: IslandPanelView(model: model))
+        let hostingView = NotchHostingView(
+            rootView: IslandPanelView(
+                model: model,
+                displayOverrideScreenID: displayOverrideScreenID
+            )
+        )
         hostingView.notchController = self
         panel.contentView = hostingView
 
-        computeNotchRect(screen: resolveTargetScreen())
+        computeNotchRect(screen: resolveTargetScreen(), layoutModePreference: model.overlayLayoutModePreference)
         return panel
     }
 
@@ -152,13 +236,14 @@ final class OverlayPanelController {
     private func positionPanel(
         _ panel: NSPanel,
         preferredScreenID: String?,
+        layoutModePreference: OverlayLayoutModePreference,
         animated: Bool
     ) -> OverlayPlacementDiagnostics? {
         guard let screen = resolveTargetScreen(preferredScreenID: preferredScreenID) else {
             return nil
         }
 
-        let windowFrame = panelFrame(for: model, on: screen)
+        let windowFrame = panelFrame(for: model, on: screen, layoutModePreference: layoutModePreference)
 
         // Always set the panel frame instantly — no AppKit animation.
         // All visual transitions (shape, size, opacity, corner radius) are
@@ -169,12 +254,64 @@ final class OverlayPanelController {
         if panel.frame != windowFrame {
             panel.setFrame(windowFrame, display: true)
         }
-        computeNotchRect(screen: screen)
+        computeNotchRect(screen: screen, layoutModePreference: layoutModePreference)
 
         return OverlayDisplayResolver.diagnostics(
             preferredScreenID: preferredScreenID,
-            panelSize: panel.frame.size
+            panelSize: panel.frame.size,
+            layoutModePreference: layoutModePreference
         )
+    }
+
+    private func positionPanel(
+        _ panel: NSPanel,
+        on screen: NSScreen,
+        layoutModePreference: OverlayLayoutModePreference
+    ) {
+        let windowFrame = panelFrame(for: model, on: screen, layoutModePreference: layoutModePreference)
+        if panel.frame != windowFrame {
+            panel.setFrame(windowFrame, display: true)
+        }
+    }
+
+    private func syncSecondaryPanels(
+        model: AppModel,
+        preferredScreenID: String?,
+        showsOnAllDisplays: Bool,
+        layoutModePreference: OverlayLayoutModePreference
+    ) {
+        guard showsOnAllDisplays else {
+            closeSecondaryPanels()
+            return
+        }
+
+        let primaryScreen = resolveTargetScreen(preferredScreenID: preferredScreenID)
+        let primaryID = primaryScreen.map(screenID(for:))
+        let targetScreens = NSScreen.screens.filter { screen in
+            screenID(for: screen) != primaryID
+        }
+        let targetIDs = Set(targetScreens.map(screenID(for:)))
+
+        for screen in targetScreens {
+            let id = screenID(for: screen)
+            let panel = secondaryPanels[id] ?? makePanel(model: model, displayOverrideScreenID: id)
+            secondaryPanels[id] = panel
+            positionPanel(panel, on: screen, layoutModePreference: layoutModePreference)
+            panel.orderFrontRegardless()
+        }
+
+        for id in secondaryPanels.keys.filter({ !targetIDs.contains($0) }) {
+            guard let panel = secondaryPanels[id] else { continue }
+            panel.close()
+            secondaryPanels[id] = nil
+        }
+    }
+
+    private func closeSecondaryPanels() {
+        for panel in secondaryPanels.values {
+            panel.close()
+        }
+        secondaryPanels.removeAll()
     }
 
     private func presentPanel(_ panel: NSPanel, activates: Bool) {
@@ -185,17 +322,20 @@ final class OverlayPanelController {
         }
     }
 
-    private func computeNotchRect(screen: NSScreen?) {
+    private func computeNotchRect(
+        screen: NSScreen?,
+        layoutModePreference: OverlayLayoutModePreference
+    ) {
         guard let screen else {
             notchRect = .zero
             return
         }
 
-        let notchSize = screen.notchSize
-        let screenFrame = screen.frame
-        let notchX = screenFrame.midX - notchSize.width / 2
-        let notchY = screenFrame.maxY - notchSize.height
-        notchRect = NSRect(x: notchX, y: notchY, width: notchSize.width, height: notchSize.height)
+        let placementMode = OverlayDisplayResolver.placementMode(
+            for: screen,
+            preference: layoutModePreference
+        )
+        notchRect = notchRect(for: screen, placementMode: placementMode)
     }
 
     private func resolveTargetScreen(preferredScreenID: String? = nil) -> NSScreen? {
@@ -348,7 +488,7 @@ final class OverlayPanelController {
     func isPointInClosedSurfaceArea(_ screenPoint: NSPoint) -> Bool {
         guard let model else { return false }
 
-        if let closedSurfaceRect = closedSurfaceRect(for: model) {
+        if let closedSurfaceRect = closedSurfaceRect(for: model, at: screenPoint) {
             return Self.rectContainsIncludingEdges(closedSurfaceRect, point: screenPoint)
         }
 
@@ -361,17 +501,16 @@ final class OverlayPanelController {
             return isPointInClosedSurfaceArea(screenPoint)
         }
 
-        guard let panel else {
-            return false
+        for panel in [panel].compactMap({ $0 }) + Array(secondaryPanels.values) {
+            guard let contentRect = contentRect(for: model, in: panel.frame) else {
+                continue
+            }
+            if Self.rectContainsIncludingEdges(contentRect, point: screenPoint) {
+                return true
+            }
         }
 
-        // The window is always at opened size, but the visible content area
-        // is the inner content rect (excluding shadow insets).
-        guard let contentRect = contentRect(for: model, in: panel.frame) else {
-            return false
-        }
-
-        return Self.rectContainsIncludingEdges(contentRect, point: screenPoint)
+        return false
     }
 
     func openedPanelWidth(for screen: NSScreen?) -> CGFloat {
@@ -439,25 +578,55 @@ final class OverlayPanelController {
         return 360 + popBonus
     }
 
-    private func closedSurfaceRect(for model: AppModel) -> NSRect? {
-        guard let screen = resolveTargetScreen() else {
+    private func closedSurfaceRect(for model: AppModel, at screenPoint: NSPoint? = nil) -> NSRect? {
+        guard let screen = screenPoint.flatMap(screenContaining(_:)) ?? resolveTargetScreen() else {
             return nil
         }
 
         let closedWidth = closedPanelWidth(for: model, on: screen)
+        let placementMode = OverlayDisplayResolver.placementMode(
+            for: screen,
+            preference: model.overlayLayoutModePreference
+        )
+        let notchRect = notchRect(for: screen, placementMode: placementMode)
         return Self.closedSurfaceRect(
             notchRect: notchRect,
             closedWidth: closedWidth
         )
     }
 
-    private func panelFrame(for model: AppModel?, on screen: NSScreen) -> NSRect {
+    private func screenContaining(_ point: NSPoint) -> NSScreen? {
+        NSScreen.screens.first { screen in
+            Self.rectContainsIncludingEdges(screen.frame, point: point)
+        }
+    }
+
+    private func notchRect(
+        for screen: NSScreen,
+        placementMode: OverlayPlacementMode
+    ) -> NSRect {
+        let notchSize = screen.notchSize
+        let notchX = screen.frame.midX - notchSize.width / 2
+        let notchY: CGFloat
+        switch placementMode {
+        case .notch:
+            notchY = screen.frame.maxY - notchSize.height
+        case .topBar:
+            notchY = screen.visibleFrame.maxY - notchSize.height - 18
+        }
+        return NSRect(x: notchX, y: notchY, width: notchSize.width, height: notchSize.height)
+    }
+
+    private func panelFrame(
+        for model: AppModel?,
+        on screen: NSScreen,
+        layoutModePreference: OverlayLayoutModePreference
+    ) -> NSRect {
         let size = panelSize(for: model, on: screen)
-        return NSRect(
-            x: screen.frame.midX - size.width / 2,
-            y: screen.frame.maxY - size.height,
-            width: size.width,
-            height: size.height
+        return OverlayDisplayResolver.frame(
+            for: screen,
+            panelSize: size,
+            layoutModePreference: layoutModePreference
         )
     }
 
@@ -475,7 +644,7 @@ final class OverlayPanelController {
         }
 
         let panelWidth = openedPanelWidth(for: screen)
-        let contentHeight = openedContentHeight(for: model)
+        let contentHeight = openedContentHeight(for: model) * model.islandFontSize.scale
         // Use at least the empty-state height so the window doesn't shrink
         // when sessions come and go while opened.
         let height = screen.notchSize.height + max(contentHeight, Self.openedEmptyStateHeight) + Self.openedContentBottomPadding + insets.bottom

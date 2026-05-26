@@ -101,6 +101,7 @@ struct IslandPanelView: View {
     private static let minimumRightUsageLaneWidth: CGFloat = 58
 
     var model: AppModel
+    var displayOverrideScreenID: String?
     private var lang: LanguageManager { model.lang }
 
     @State private var isHovering = false
@@ -134,6 +135,11 @@ struct IslandPanelView: View {
     }
 
     private var targetOverlayScreen: NSScreen? {
+        if let displayOverrideScreenID,
+           let screen = NSScreen.screens.first(where: { screenID(for: $0) == displayOverrideScreenID }) {
+            return screen
+        }
+
         if let targetScreenID = model.overlayPlacementDiagnostics?.targetScreenID,
            let screen = NSScreen.screens.first(where: { screenID(for: $0) == targetScreenID }) {
             return screen
@@ -142,20 +148,25 @@ struct IslandPanelView: View {
         return NSScreen.screens.first(where: { $0.safeAreaInsets.top > 0 }) ?? NSScreen.main
     }
 
+    private var targetPlacementMode: OverlayPlacementMode {
+        if let targetOverlayScreen {
+            return OverlayDisplayResolver.placementMode(
+                for: targetOverlayScreen,
+                preference: model.overlayLayoutModePreference
+            )
+        }
+        return model.overlayPlacementDiagnostics?.mode ?? .topBar
+    }
+
     private var usesNotchAwareOpenedHeader: Bool {
-        model.overlayPlacementDiagnostics?.mode == .notch
-            || targetOverlayScreen?.safeAreaInsets.top ?? 0 > 0
+        targetPlacementMode == .notch
     }
 
     /// True when the closed island sits on an external (non-notched) display.
     /// The central black rectangle is otherwise aligned with the physical
     /// notch, so center content is only useful here.
     private var isExternalDisplayPlacement: Bool {
-        if let mode = model.overlayPlacementDiagnostics?.mode {
-            return mode == .topBar
-        }
-        // Fallback when diagnostics haven't been populated yet.
-        return (targetOverlayScreen?.safeAreaInsets.top ?? 0) == 0
+        targetPlacementMode == .topBar
     }
 
     private var openedHeaderButtonsWidth: CGFloat {
@@ -192,6 +203,7 @@ struct IslandPanelView: View {
         .onChange(of: model.notchStatus) { _, status in
             syncOpenedSurfaceMount(with: status)
         }
+        .environment(\.islandFontScale, model.islandFontSize.scale)
     }
 
     @ViewBuilder
@@ -450,7 +462,7 @@ struct IslandPanelView: View {
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(Color.accentColor)
                 Text(model.lang.t("island.hint.installHooks"))
-                    .font(.system(size: 12, weight: .medium))
+                    .font(.islandSystem(size: 12, weight: .medium, scale: model.islandFontSize.scale))
                     .foregroundStyle(.white.opacity(0.85))
                     .lineLimit(2)
                     .multilineTextAlignment(.leading)
@@ -481,10 +493,10 @@ struct IslandPanelView: View {
                 .tint(.white.opacity(0.7))
                 .scaleEffect(0.8)
             Text(model.lang.t("island.checkingTerminals"))
-                .font(.system(size: 14, weight: .medium))
+                .font(.islandSystem(size: 14, weight: .medium, scale: model.islandFontSize.scale))
                 .foregroundStyle(.white.opacity(0.58))
             Text(model.lang.t("island.terminalOwnership"))
-                .font(.system(size: 12))
+                .font(.islandSystem(size: 12, scale: model.islandFontSize.scale))
                 .foregroundStyle(.white.opacity(0.28))
             Spacer()
         }
@@ -495,12 +507,12 @@ struct IslandPanelView: View {
         VStack(spacing: 12) {
             Spacer()
             Text(model.lang.t("island.noTerminals"))
-                .font(.system(size: 14, weight: .medium))
+                .font(.islandSystem(size: 14, weight: .medium, scale: model.islandFontSize.scale))
                 .foregroundStyle(.white.opacity(0.4))
             Text(model.recentSessions.isEmpty
                 ? model.lang.t("island.startAgent")
                 : model.lang.t("island.recentSessions"))
-                .font(.system(size: 12))
+                .font(.islandSystem(size: 12, scale: model.islandFontSize.scale))
                 .foregroundStyle(.white.opacity(0.25))
             Spacer()
         }
@@ -586,6 +598,7 @@ struct IslandPanelView: View {
                     presentation: .notification,
                     sideInset: sessionListSideInset,
                     lang: model.lang,
+                    fontScale: model.islandFontSize.scale,
                     onApprove: { model.approvePermission(for: session.id, action: $0) },
                     onAnswer: { model.answerQuestion(for: session.id, answer: $0) },
                     onReply: TerminalTextSender.canReply(to: session, enabled: model.completionReplyEnabled)
@@ -600,7 +613,7 @@ struct IslandPanelView: View {
                         model.expandNotificationToSessionList(clearExpansion: isCompletion)
                     } label: {
                         Text(model.lang.t("island.showAll", model.allSessions.count))
-                            .font(.system(size: 10.5, weight: .medium))
+                            .font(.islandSystem(size: 10.5, weight: .medium, scale: model.islandFontSize.scale))
                             .foregroundStyle(.white.opacity(0.36))
                             .frame(maxWidth: .infinity, alignment: .center)
                             .padding(.horizontal, sessionListSideInset)
@@ -627,6 +640,7 @@ struct IslandPanelView: View {
                                 isInteractive: model.notchStatus == .opened,
                                 sideInset: sessionListSideInset,
                                 lang: model.lang,
+                                fontScale: model.islandFontSize.scale,
                                 onApprove: { model.approvePermission(for: session.id, action: $0) },
                                 onAnswer: { model.answerQuestion(for: session.id, answer: $0) },
                                 onReply: TerminalTextSender.canReply(to: session, enabled: model.completionReplyEnabled)
@@ -677,6 +691,7 @@ struct IslandPanelView: View {
                         isInteractive: model.notchStatus == .opened,
                         sideInset: sessionListSideInset,
                         lang: model.lang,
+                        fontScale: model.islandFontSize.scale,
                         onApprove: { model.approvePermission(for: session.id, action: $0) },
                         onAnswer: { model.answerQuestion(for: session.id, answer: $0) },
                         onReply: TerminalTextSender.canReply(to: session, enabled: model.completionReplyEnabled)
@@ -694,7 +709,7 @@ struct IslandPanelView: View {
 
         return HStack(spacing: 8) {
             Text(lang.t("island.sessionList.title").uppercased())
-                .font(.system(size: 10.5, weight: .semibold, design: .monospaced))
+                .font(.islandSystem(size: 10.5, weight: .semibold, design: .monospaced, scale: model.islandFontSize.scale))
                 .tracking(1.4)
                 .foregroundStyle(V6Palette.paper.opacity(0.55))
 
@@ -1095,6 +1110,7 @@ private struct IslandSessionRow: View {
     var presentation: IslandSessionRowPresentation = .list
     var sideInset: CGFloat = 16
     var lang: LanguageManager = .shared
+    var fontScale: CGFloat = 1
     var onApprove: ((ApprovalAction) -> Void)?
     var onAnswer: ((QuestionPromptResponse) -> Void)?
     var onReply: ((String) -> Void)?
@@ -1182,7 +1198,7 @@ private struct IslandSessionRow: View {
                 if showsDetail,
                    let promptLine = summaryPromptLineText {
                     Text(promptLine)
-                        .font(.system(size: 11.2, weight: .medium))
+                        .font(.islandSystem(size: 11.2, weight: .medium, scale: fontScale))
                         .foregroundStyle(summaryPromptColor(for: presence))
                         .lineLimit(1)
                         .truncationMode(.tail)
@@ -1200,7 +1216,7 @@ private struct IslandSessionRow: View {
                     sideBadge(terminalBadge)
                 }
                 Text(session.spotlightAgeBadge)
-                    .font(.system(size: 10.5, weight: .medium, design: .monospaced))
+                    .font(.islandSystem(size: 10.5, weight: .medium, design: .monospaced, scale: fontScale))
                     .foregroundStyle(summaryAgeColor(for: presence))
                     .frame(minWidth: 30, alignment: .trailing)
                 detailToggleButton(isOpen: showsDetail)
@@ -1220,7 +1236,7 @@ private struct IslandSessionRow: View {
         if !shouldShowEmbeddedDetailBody,
            let activityLine = session.spotlightActivityLineText ?? expandedActivityLineText {
             Text(activityLine)
-                .font(.system(size: 11, weight: .medium))
+                .font(.islandSystem(size: 11, weight: .medium, scale: fontScale))
                 .foregroundStyle(activityColor(for: presence).opacity(0.94))
                 .lineLimit(2)
                 .padding(.leading, detailLeadingInset)
@@ -1235,7 +1251,7 @@ private struct IslandSessionRow: View {
                     Image(systemName: "arrow.triangle.branch")
                         .font(.system(size: 9, weight: .medium))
                     Text(lang.t("subagents.title", subagents.count))
-                        .font(.system(size: 10.5, weight: .medium))
+                        .font(.islandSystem(size: 10.5, weight: .medium, scale: fontScale))
                 }
                 .foregroundStyle(.cyan.opacity(0.8))
 
@@ -1247,24 +1263,24 @@ private struct IslandSessionRow: View {
                                 : IslandDesignPalette.Status.running)
                             .frame(width: 6, height: 6)
                         Text(sub.agentType ?? sub.agentID)
-                            .font(.system(size: 11, weight: .medium))
+                            .font(.islandSystem(size: 11, weight: .medium, scale: fontScale))
                             .foregroundStyle(.white.opacity(0.8))
                             .lineLimit(1)
                         if let desc = sub.taskDescription {
                             Text("(\(desc))")
-                                .font(.system(size: 10.5))
+                                .font(.islandSystem(size: 10.5, scale: fontScale))
                                 .foregroundStyle(.white.opacity(0.5))
                                 .lineLimit(1)
                         }
                         Spacer(minLength: 0)
                         if sub.summary != nil {
                             Text(lang.t("subagents.completed"))
-                                .font(.system(size: 10, weight: .medium))
+                                .font(.islandSystem(size: 10, weight: .medium, scale: fontScale))
                                 .foregroundStyle(.white.opacity(0.4))
                         } else if let started = sub.startedAt {
                             TimelineView(.periodic(from: .now, by: 1)) { timeline in
                                 Text(subagentElapsed(since: started, at: timeline.date))
-                                    .font(.system(size: 10, weight: .medium))
+                                    .font(.islandSystem(size: 10, weight: .medium, scale: fontScale))
                                     .foregroundStyle(.white.opacity(0.4))
                             }
                         }
@@ -1280,13 +1296,13 @@ private struct IslandSessionRow: View {
            !tasks.isEmpty {
             VStack(alignment: .leading, spacing: 3) {
                 Text(taskSummary(tasks))
-                    .font(.system(size: 10.5, weight: .medium))
+                    .font(.islandSystem(size: 10.5, weight: .medium, scale: fontScale))
                     .foregroundStyle(.white.opacity(0.45))
                 ForEach(tasks) { task in
                     HStack(spacing: 5) {
                         taskStatusIcon(task.status)
                         Text(task.title)
-                            .font(.system(size: 10.5, weight: .medium))
+                            .font(.islandSystem(size: 10.5, weight: .medium, scale: fontScale))
                             .foregroundStyle(task.status == .completed
                                 ? .white.opacity(0.4)
                                 : .white.opacity(0.7))
@@ -1304,7 +1320,7 @@ private struct IslandSessionRow: View {
     private var agentBadge: some View {
         let tint = Color(hex: session.tool.brandColorHex) ?? V6Palette.paper
         return Text(agentBadgeTitle)
-            .font(.system(size: 10.5, weight: .semibold, design: .monospaced))
+            .font(.islandSystem(size: 10.5, weight: .semibold, design: .monospaced, scale: fontScale))
             .foregroundStyle(tint.opacity(notificationChromeOpacity))
             .padding(.horizontal, 8)
             .padding(.vertical, 3)
@@ -1314,7 +1330,7 @@ private struct IslandSessionRow: View {
 
     private func sideBadge(_ title: String) -> some View {
         Text(title)
-            .font(.system(size: 10.5, weight: .medium, design: .monospaced))
+            .font(.islandSystem(size: 10.5, weight: .medium, design: .monospaced, scale: fontScale))
             .foregroundStyle(V6Palette.paper.opacity(presentation == .notification ? 0.52 : 0.7))
             .padding(.horizontal, 8)
             .padding(.vertical, 3)
@@ -1417,7 +1433,7 @@ private struct IslandSessionRow: View {
     }
 
     private var summaryTitleFont: Font {
-        .system(size: presentation == .notification ? 13.2 : (isActionable ? 13.8 : 13.2), weight: .semibold)
+        .islandSystem(size: presentation == .notification ? 13.2 : (isActionable ? 13.8 : 13.2), weight: .semibold, scale: fontScale)
     }
 
     private func summaryPromptColor(for presence: IslandSessionPresence) -> Color {
@@ -1514,7 +1530,7 @@ private struct IslandSessionRow: View {
         VStack(alignment: .leading, spacing: 0) {
             if let runningDetailText {
                 Text(runningDetailText)
-                    .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                    .font(.islandSystem(size: 12, weight: .semibold, design: .monospaced, scale: fontScale))
                     .foregroundStyle(.white.opacity(0.82))
                     .lineLimit(3)
                     .fixedSize(horizontal: false, vertical: true)
@@ -1540,19 +1556,19 @@ private struct IslandSessionRow: View {
     private var approvalActionBody: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(lang.t("approval.toolPermissionRequested"))
-                .font(.system(size: 12.5, weight: .semibold))
+                .font(.islandSystem(size: 12.5, weight: .semibold, scale: fontScale))
                 .foregroundStyle(V6Palette.paper.opacity(0.86))
 
             VStack(alignment: .leading, spacing: 8) {
                 Text(commandPreviewText)
-                    .font(.system(size: 11.5, weight: .semibold, design: .monospaced))
+                    .font(.islandSystem(size: 11.5, weight: .semibold, design: .monospaced, scale: fontScale))
                     .foregroundStyle(V6Palette.paper.opacity(0.78))
                     .fixedSize(horizontal: false, vertical: true)
 
                 if let path = session.permissionRequest?.affectedPath.trimmedForNotificationCard,
                    !path.isEmpty {
                     Text(path)
-                        .font(.system(size: 10.5, weight: .medium))
+                        .font(.islandSystem(size: 10.5, weight: .medium, scale: fontScale))
                         .foregroundStyle(V6Palette.paper.opacity(0.42))
                         .lineLimit(1)
                 }
@@ -1593,6 +1609,7 @@ private struct IslandSessionRow: View {
         StructuredQuestionPromptView(
             prompt: session.questionPrompt,
             lang: lang,
+            fontScale: fontScale,
             onAnswer: { onAnswer?($0) }
         )
     }
@@ -1603,8 +1620,8 @@ private struct IslandSessionRow: View {
         VStack(alignment: .leading, spacing: 0) {
             if !completionMessageText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 AutoHeightScrollView(maxHeight: 160) {
-                    Text(completionMessageText)
-                        .font(.system(size: 13.5, weight: .medium))
+                    IslandMarkdownText(markdown: completionMessageText)
+                        .font(.islandSystem(size: 13.5, weight: .medium, scale: fontScale))
                         .foregroundStyle(.white.opacity(0.88))
                         .textSelection(.enabled)
                         .frame(maxWidth: .infinity, alignment: .topLeading)
@@ -1941,6 +1958,7 @@ private struct IslandSessionRow: View {
 private struct StructuredQuestionPromptView: View {
     let prompt: QuestionPrompt?
     var lang: LanguageManager = .shared
+    var fontScale: CGFloat = 1
     let onAnswer: (QuestionPromptResponse) -> Void
 
     @State private var selections: [String: Set<String>] = [:]
@@ -1951,8 +1969,8 @@ private struct StructuredQuestionPromptView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             if showsPromptTitle {
-                Text(promptTitle)
-                    .font(.system(size: 13, weight: .semibold))
+                IslandMarkdownText(markdown: promptTitle)
+                    .font(.islandSystem(size: 13, weight: .semibold, scale: fontScale))
                     .foregroundStyle(IslandDesignPalette.Status.waitingForAnswer)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -1996,12 +2014,12 @@ private struct StructuredQuestionPromptView: View {
         VStack(alignment: .leading, spacing: 6) {
             if structuredQuestions.count > 1 {
                 Text(question.header)
-                    .font(.system(size: 10, weight: .bold))
+                    .font(.islandSystem(size: 10, weight: .bold, scale: fontScale))
                     .foregroundStyle(.white.opacity(0.5))
             }
 
-            Text(question.question)
-                .font(.system(size: 12, weight: .medium))
+            IslandMarkdownText(markdown: question.question)
+                .font(.islandSystem(size: 12, weight: .medium, scale: fontScale))
                 .foregroundStyle(.white.opacity(0.88))
                 .fixedSize(horizontal: false, vertical: true)
 
@@ -2031,7 +2049,7 @@ private struct StructuredQuestionPromptView: View {
             } label: {
                 HStack(spacing: 10) {
                     Text("\(optionIndex + 1)")
-                        .font(.system(size: 10.5, weight: .semibold, design: .monospaced))
+                        .font(.islandSystem(size: 10.5, weight: .semibold, design: .monospaced, scale: fontScale))
                         .foregroundStyle(isSelected ? .black.opacity(0.82) : V6Palette.paper.opacity(0.42))
                         .frame(width: 22, height: 20)
                         .background(
@@ -2045,12 +2063,12 @@ private struct StructuredQuestionPromptView: View {
 
                     VStack(alignment: .leading, spacing: 1) {
                         Text(option.label)
-                            .font(.system(size: 12.2, weight: .medium))
+                            .font(.islandSystem(size: 12.2, weight: .medium, scale: fontScale))
                             .foregroundStyle(.white.opacity(isSelected ? 1 : 0.78))
 
                         if !option.description.isEmpty {
                             Text(option.description)
-                                .font(.system(size: 10.5))
+                                .font(.islandSystem(size: 10.5, scale: fontScale))
                                 .foregroundStyle(.white.opacity(isHovered || isSelected ? 0.48 : 0.38))
                                 .lineLimit(1)
                         }
