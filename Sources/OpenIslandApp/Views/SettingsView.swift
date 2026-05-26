@@ -246,7 +246,7 @@ struct DisplaySettingsPane: View {
                 )) {
                     Text(lang.t("settings.general.automatic")).tag(OverlayDisplayOption.automaticID)
                     ForEach(model.overlayDisplayOptions) { option in
-                        Text(option.title).tag(option.id)
+                        Text(displayOptionTitle(option)).tag(option.id)
                     }
                 }
 
