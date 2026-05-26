@@ -862,69 +862,11 @@ struct IslandPanelView: View {
             return []
         }
 
-        var providers: [UsageProviderPresentation] = []
-
-        if let snapshot = model.claudeUsageSnapshot,
-           snapshot.isEmpty == false {
-            var windows: [UsageWindowPresentation] = []
-
-            if let fiveHour = snapshot.fiveHour {
-                windows.append(
-                    UsageWindowPresentation(
-                        id: "claude-5h",
-                        label: "5h",
-                        usedPercentage: fiveHour.usedPercentage,
-                        resetsAt: fiveHour.resetsAt
-                    )
-                )
-            }
-
-            if let sevenDay = snapshot.sevenDay {
-                windows.append(
-                    UsageWindowPresentation(
-                        id: "claude-7d",
-                        label: "7d",
-                        usedPercentage: sevenDay.usedPercentage,
-                        resetsAt: sevenDay.resetsAt
-                    )
-                )
-            }
-
-            if windows.isEmpty == false {
-                providers.append(
-                    UsageProviderPresentation(
-                        id: "claude",
-                        title: "Claude",
-                        windows: windows
-                    )
-                )
-            }
-        }
-
-        if model.showCodexUsage,
-           let snapshot = model.codexUsageSnapshot,
-           snapshot.isEmpty == false {
-            let windows = snapshot.windows.map { window in
-                UsageWindowPresentation(
-                    id: "codex-\(window.key)",
-                    label: window.label,
-                    usedPercentage: window.usedPercentage,
-                    resetsAt: window.resetsAt
-                )
-            }
-
-            if windows.isEmpty == false {
-                providers.append(
-                    UsageProviderPresentation(
-                        id: "codex",
-                        title: "Codex",
-                        windows: windows
-                    )
-                )
-            }
-        }
-
-        return providers
+        return UsageProviderPresentation.providers(
+            claude: model.claudeUsageSnapshot,
+            codex: model.codexUsageSnapshot,
+            showCodex: model.showCodexUsage
+        )
     }
 
     private func splitUsageProviders(
@@ -1044,13 +986,15 @@ struct IslandPanelView: View {
                 .font(.system(size: 11, weight: .semibold))
                 .foregroundStyle(.white.opacity(0.74))
 
-            Text(provider.peakWindowLabel)
-                .font(.system(size: 10.5, weight: .semibold, design: .monospaced))
-                .foregroundStyle(.white.opacity(0.42))
+            ForEach(provider.windows) { window in
+                Text(window.label)
+                    .font(.system(size: 10.5, weight: .semibold, design: .monospaced))
+                    .foregroundStyle(.white.opacity(0.42))
 
-            Text("\(provider.peakUsagePercentage)%")
-                .font(.system(size: 11.5, weight: .bold, design: .monospaced))
-                .foregroundStyle(usageColor(for: provider.peakUsedPercentage))
+                Text("\(window.roundedUsedPercentage)%")
+                    .font(.system(size: 11.5, weight: .bold, design: .monospaced))
+                    .foregroundStyle(usageColor(for: window.severity))
+            }
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 4)
@@ -1083,13 +1027,13 @@ struct IslandPanelView: View {
             .background(.white.opacity(0.08), in: Capsule())
     }
 
-    private func usageColor(for percentage: Double) -> Color {
-        switch percentage {
-        case 90...:
+    private func usageColor(for severity: UsageSeverity) -> Color {
+        switch severity {
+        case .critical:
             .red.opacity(0.95)
-        case 70..<90:
+        case .warning:
             .orange.opacity(0.95)
-        default:
+        case .normal:
             .green.opacity(0.95)
         }
     }
@@ -1115,52 +1059,6 @@ struct IslandPanelView: View {
         }
 
         return formatter.string(from: interval)
-    }
-}
-
-private struct UsageProviderPresentation: Identifiable {
-    let id: String
-    let title: String
-    let windows: [UsageWindowPresentation]
-
-    var peakWindow: UsageWindowPresentation? {
-        windows.max { lhs, rhs in
-            lhs.usedPercentage < rhs.usedPercentage
-        }
-    }
-
-    var peakWindowLabel: String {
-        peakWindow?.label ?? ""
-    }
-
-    var peakUsedPercentage: Double {
-        peakWindow?.usedPercentage ?? 0
-    }
-
-    var peakUsagePercentage: Int {
-        peakWindow?.roundedUsedPercentage ?? 0
-    }
-
-    var shortTitle: String {
-        switch id {
-        case "claude":
-            "Cl"
-        case "codex":
-            "Cx"
-        default:
-            String(title.prefix(2))
-        }
-    }
-}
-
-private struct UsageWindowPresentation: Identifiable {
-    let id: String
-    let label: String
-    let usedPercentage: Double
-    let resetsAt: Date?
-
-    var roundedUsedPercentage: Int {
-        Int(usedPercentage.rounded())
     }
 }
 

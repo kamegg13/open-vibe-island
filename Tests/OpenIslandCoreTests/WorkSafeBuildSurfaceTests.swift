@@ -66,6 +66,14 @@ final class WorkSafeBuildSurfaceTests: XCTestCase {
         XCTAssertFalse(hookCLI.contains("case codebuddy"), "Hook helper must not accept CodeBuddy events in the work-safe app.")
     }
 
+    func testIslandChromeUsesTrueBlackAndCodexAppServerFallsBackToAllThreads() throws {
+        let v6Palette = try contents("Sources/OpenIslandApp/V6ClosedPillShape.swift")
+        let codexAppServerCoordinator = try contents("Sources/OpenIslandApp/CodexAppServerCoordinator.swift")
+
+        XCTAssertTrue(v6Palette.contains("static let ink = Color.black"), "The island ink must be true black so it blends with the physical notch.")
+        XCTAssertTrue(codexAppServerCoordinator.contains("listThreads(limit:"), "Codex app-server sync must fall back to the full thread list when loaded threads are empty.")
+    }
+
     func testAppcastDoesNotPointAtUpstreamReleases() throws {
         let appcast = try contents("appcast.xml")
 

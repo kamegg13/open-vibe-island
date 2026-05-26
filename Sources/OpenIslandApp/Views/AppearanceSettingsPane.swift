@@ -38,6 +38,9 @@ struct AppearanceSettingsPane: View {
         }
         .background(Color(red: 0.055, green: 0.055, blue: 0.06))
         .navigationTitle(lang.t("settings.tab.appearance"))
+        .onAppear {
+            model.syncAppearanceSettingsProfileToActivePlacement()
+        }
     }
 
     // MARK: - Display profile

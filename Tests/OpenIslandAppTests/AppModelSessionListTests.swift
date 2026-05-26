@@ -24,6 +24,7 @@ struct AppModelSessionListTests {
             "appearance.island.v8.topBar.sessionGroup",
             "appearance.island.v8.topBar.sessionSort",
             "appearance.island.v8.topBar.completedStaleThreshold",
+            "app.showCodexUsage",
             "app.suppressFrontmostNotifications",
             "feature.completionReply.enabled",
             "overlay.sound.muted",
@@ -377,6 +378,64 @@ struct AppModelSessionListTests {
         #expect(reloaded.islandSessionGroup == .project)
         #expect(reloaded.islandSessionStateIndicator == .tint)
         #expect(reloaded.completedStaleThreshold == .never)
+    }
+
+    @Test
+    func settingsAppearanceProfileCanSyncToTheActivePlacement() {
+        let model = AppModel()
+        model.appearanceSettingsProfile = .topBar
+        model.overlayPlacementDiagnostics = placementDiagnostics(mode: .notch)
+
+        model.syncAppearanceSettingsProfileToActivePlacement()
+
+        #expect(model.appearanceSettingsProfile == .notch)
+    }
+
+    @Test
+    func usagePresentationShowsEveryClaudeAndCodexWindow() {
+        let providers = UsageProviderPresentation.providers(
+            claude: ClaudeUsageSnapshot(
+                fiveHour: ClaudeUsageWindow(usedPercentage: 42.1, resetsAt: nil),
+                sevenDay: ClaudeUsageWindow(usedPercentage: 77.9, resetsAt: nil)
+            ),
+            codex: CodexUsageSnapshot(
+                sourceFilePath: "/tmp/rollout.jsonl",
+                capturedAt: nil,
+                windows: [
+                    CodexUsageWindow(
+                        key: "primary",
+                        label: "5h",
+                        usedPercentage: 12.2,
+                        leftPercentage: 87.8,
+                        windowMinutes: 300,
+                        resetsAt: nil
+                    ),
+                    CodexUsageWindow(
+                        key: "secondary",
+                        label: "7d",
+                        usedPercentage: 91.5,
+                        leftPercentage: 8.5,
+                        windowMinutes: 10_080,
+                        resetsAt: nil
+                    ),
+                ]
+            ),
+            showCodex: true
+        )
+
+        #expect(providers.map(\.inlineText) == [
+            "Claude 5h 42% 7d 78%",
+            "Codex 5h 12% 7d 92%",
+        ])
+        #expect(providers[0].windows.map(\.severity) == [.normal, .warning])
+        #expect(providers[1].windows.map(\.severity) == [.normal, .critical])
+    }
+
+    @Test
+    func codexUsageMonitoringIsEnabledByDefault() {
+        let model = AppModel()
+
+        #expect(model.showCodexUsage)
     }
 
     @Test
