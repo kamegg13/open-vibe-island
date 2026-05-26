@@ -100,13 +100,10 @@ final class OverlayPanelController {
             layoutModePreference: layoutModePreference
         )
         presentPanel(panel, activates: Self.shouldActivatePanel(for: model.notchOpenReason))
-        panel.ignoresMouseEvents = false
-        panel.acceptsMouseMovedEvents = true
         for secondaryPanel in secondaryPanels.values {
             presentPanel(secondaryPanel, activates: false)
-            secondaryPanel.ignoresMouseEvents = false
-            secondaryPanel.acceptsMouseMovedEvents = true
         }
+        updatePanelInteractivity(interactive: true)
         startEventMonitoring()
         return diagnostics
     }
@@ -125,12 +122,7 @@ final class OverlayPanelController {
             return
         }
 
-        panel.ignoresMouseEvents = !interactive
-        panel.acceptsMouseMovedEvents = interactive
-        for secondaryPanel in secondaryPanels.values {
-            secondaryPanel.ignoresMouseEvents = !interactive
-            secondaryPanel.acceptsMouseMovedEvents = interactive
-        }
+        updatePanelInteractivity(interactive: interactive)
 
         if interactive {
             presentPanel(panel, activates: Self.shouldActivatePanel(for: model?.notchOpenReason))
@@ -184,7 +176,7 @@ final class OverlayPanelController {
     // MARK: - Panel creation
 
     private func makePanel(model: AppModel, displayOverrideScreenID: String? = nil) -> NotchPanel {
-        let screen = resolveTargetScreen() ?? NSScreen.main
+        let screen = resolveTargetScreen(preferredScreenID: displayOverrideScreenID) ?? NSScreen.main
         let windowFrame = screen.map {
             panelFrame(for: model, on: $0, layoutModePreference: model.overlayLayoutModePreference)
         } ?? .zero
@@ -226,7 +218,7 @@ final class OverlayPanelController {
         hostingView.notchController = self
         panel.contentView = hostingView
 
-        computeNotchRect(screen: resolveTargetScreen(), layoutModePreference: model.overlayLayoutModePreference)
+        computeNotchRect(screen: screen, layoutModePreference: model.overlayLayoutModePreference)
         return panel
     }
 
@@ -322,6 +314,39 @@ final class OverlayPanelController {
         }
     }
 
+    private func updatePanelInteractivity(interactive: Bool) {
+        guard interactive else {
+            panel?.ignoresMouseEvents = true
+            panel?.acceptsMouseMovedEvents = false
+            for secondaryPanel in secondaryPanels.values {
+                secondaryPanel.ignoresMouseEvents = true
+                secondaryPanel.acceptsMouseMovedEvents = false
+            }
+            return
+        }
+
+        let activeScreenID = model?.activeOverlayScreenID
+        updatePanelInteractivity(panel, screenID: primaryPanelScreenID, activeScreenID: activeScreenID)
+        for (screenID, panel) in secondaryPanels {
+            updatePanelInteractivity(panel, screenID: screenID, activeScreenID: activeScreenID)
+        }
+    }
+
+    private func updatePanelInteractivity(
+        _ panel: NSPanel?,
+        screenID: String?,
+        activeScreenID: String?
+    ) {
+        guard let panel else { return }
+        let isActive = activeScreenID == nil || screenID == activeScreenID
+        panel.ignoresMouseEvents = !isActive
+        panel.acceptsMouseMovedEvents = isActive
+    }
+
+    private var primaryPanelScreenID: String? {
+        panel?.screen.map { screenID(for: $0) } ?? model?.activeOverlayScreenID
+    }
+
     private func computeNotchRect(
         screen: NSScreen?,
         layoutModePreference: OverlayLayoutModePreference
@@ -384,7 +409,7 @@ final class OverlayPanelController {
         let inClosedSurfaceArea = isPointInClosedSurfaceArea(screenLocation)
 
         if model.notchStatus == .closed && inClosedSurfaceArea {
-            scheduleHoverOpen()
+            scheduleHoverOpen(from: screenLocation)
         } else if model.notchStatus == .closed && !inClosedSurfaceArea {
             cancelHoverOpen()
         }
@@ -409,6 +434,7 @@ final class OverlayPanelController {
 
         if model.notchStatus == .closed && inClosedSurfaceArea {
             cancelHoverOpenImmediately()
+            model.activeOverlayScreenID = screenID(containing: screenLocation)
             model.notchOpen(reason: .click)
         } else if model.notchStatus == .opened {
             if !isPointInExpandedArea(screenLocation) {
@@ -422,7 +448,7 @@ final class OverlayPanelController {
     /// mouse jitter at the notch edge from resetting the delay.
     private static let hoverCancelGracePeriod: TimeInterval = 0.1
 
-    private func scheduleHoverOpen() {
+    private func scheduleHoverOpen(from screenLocation: NSPoint) {
         // Mouse re-entered during grace period — just revoke the cancel.
         hoverCancelGrace?.cancel()
         hoverCancelGrace = nil
@@ -430,10 +456,11 @@ final class OverlayPanelController {
         guard model != nil else { return }
 
         guard hoverTimer == nil else { return }
+        let activeScreenID = screenID(containing: screenLocation)
 
         let item = DispatchWorkItem { [weak self] in
             guard let self, let model = self.model else { return }
-            self.performHoverOpen(model)
+            self.performHoverOpen(model, activeScreenID: activeScreenID)
             self.hoverTimer = nil
         }
 
@@ -441,8 +468,9 @@ final class OverlayPanelController {
         DispatchQueue.main.asyncAfter(deadline: .now() + AppModel.hoverOpenDelay, execute: item)
     }
 
-    private func performHoverOpen(_ model: AppModel) {
+    private func performHoverOpen(_ model: AppModel, activeScreenID: String?) {
         guard model.notchStatus == .closed else { return }
+        model.activeOverlayScreenID = activeScreenID
 
         if model.hapticFeedbackEnabled {
             NSHapticFeedbackManager.defaultPerformer.perform(
@@ -502,6 +530,10 @@ final class OverlayPanelController {
         }
 
         for panel in [panel].compactMap({ $0 }) + Array(secondaryPanels.values) {
+            if let activeScreenID = model.activeOverlayScreenID,
+               panel.screen.map({ screenID(for: $0) }) != activeScreenID {
+                continue
+            }
             guard let contentRect = contentRect(for: model, in: panel.frame) else {
                 continue
             }
@@ -599,6 +631,10 @@ final class OverlayPanelController {
         NSScreen.screens.first { screen in
             Self.rectContainsIncludingEdges(screen.frame, point: point)
         }
+    }
+
+    private func screenID(containing point: NSPoint) -> String? {
+        screenContaining(point).map(screenID(for:))
     }
 
     private func notchRect(

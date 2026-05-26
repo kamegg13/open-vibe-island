@@ -164,6 +164,10 @@ final class AppModel {
         get { overlay.overlayPlacementDiagnostics }
         set { overlay.overlayPlacementDiagnostics = newValue }
     }
+    var activeOverlayScreenID: String? {
+        get { overlay.activeOverlayScreenID }
+        set { overlay.activeOverlayScreenID = newValue }
+    }
     var showDockIcon: Bool = false {
         didSet {
             guard hasFinishedInit, showDockIcon != oldValue else { return }
