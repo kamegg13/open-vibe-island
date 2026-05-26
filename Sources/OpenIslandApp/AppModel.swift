@@ -341,6 +341,10 @@ final class AppModel {
         }
     }
 
+    func syncAppearanceSettingsProfileToActivePlacement() {
+        appearanceSettingsProfile = activeAppearanceProfile
+    }
+
     private func appearancePreferencesDidChange(
         oldValue: IslandAppearancePreferences,
         newValue: IslandAppearancePreferences
@@ -476,9 +480,7 @@ final class AppModel {
         if UserDefaults.standard.object(forKey: Self.showCodexUsageDefaultsKey) != nil {
             showCodexUsage = UserDefaults.standard.bool(forKey: Self.showCodexUsageDefaultsKey)
         } else {
-            showCodexUsage = FileManager.default.fileExists(
-                atPath: CodexRolloutDiscovery.defaultRootURL.path
-            )
+            showCodexUsage = true
         }
         completionReplyEnabled = UserDefaults.standard.bool(forKey: Self.completionReplyEnabledDefaultsKey)
         launchAtLoginEnabled = LaunchAtLoginService.shared.isEnabled
