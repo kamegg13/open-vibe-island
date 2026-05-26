@@ -181,7 +181,7 @@ struct GeneralSettingsPane: View {
                 )) {
                     Text(lang.t("settings.general.automatic")).tag(OverlayDisplayOption.automaticID)
                     ForEach(model.overlayDisplayOptions) { option in
-                        Text(option.title).tag(option.id)
+                        Text(displayOptionTitle(option)).tag(option.id)
                     }
                 }
             }
@@ -222,6 +222,12 @@ struct GeneralSettingsPane: View {
         .formStyle(.grouped)
         .navigationTitle(lang.t("settings.tab.general"))
     }
+
+    private func displayOptionTitle(_ option: OverlayDisplayOption) -> String {
+        option.id == OverlayDisplayOption.allDisplaysID
+            ? lang.t("settings.display.allDisplays")
+            : option.title
+    }
 }
 
 // MARK: - Display
@@ -243,6 +249,27 @@ struct DisplaySettingsPane: View {
                         Text(option.title).tag(option.id)
                     }
                 }
+
+                Picker(lang.t("settings.display.layoutModePreference"), selection: Binding(
+                    get: { model.overlayLayoutModePreference },
+                    set: { model.overlayLayoutModePreference = $0 }
+                )) {
+                    ForEach(OverlayLayoutModePreference.allCases) { mode in
+                        Text(layoutModePreferenceTitle(mode)).tag(mode)
+                    }
+                }
+            }
+
+            Section(lang.t("settings.display.typography")) {
+                Picker(lang.t("settings.display.fontSize"), selection: Binding(
+                    get: { model.islandFontSize },
+                    set: { model.islandFontSize = $0 }
+                )) {
+                    ForEach(IslandFontSize.allCases) { size in
+                        Text(fontSizeTitle(size)).tag(size)
+                    }
+                }
+                .pickerStyle(.segmented)
             }
 
             if let diag = model.overlayPlacementDiagnostics {
@@ -254,6 +281,29 @@ struct DisplaySettingsPane: View {
         }
         .formStyle(.grouped)
         .navigationTitle(lang.t("settings.tab.display"))
+    }
+
+    private func layoutModePreferenceTitle(_ mode: OverlayLayoutModePreference) -> String {
+        switch mode {
+        case .automatic:       lang.t("settings.display.layoutMode.automatic")
+        case .externalDisplay: lang.t("settings.display.layoutMode.external")
+        case .macOSNotch:      lang.t("settings.display.layoutMode.notch")
+        }
+    }
+
+    private func displayOptionTitle(_ option: OverlayDisplayOption) -> String {
+        option.id == OverlayDisplayOption.allDisplaysID
+            ? lang.t("settings.display.allDisplays")
+            : option.title
+    }
+
+    private func fontSizeTitle(_ size: IslandFontSize) -> String {
+        switch size {
+        case .small:      lang.t("settings.display.fontSize.small")
+        case .regular:    lang.t("settings.display.fontSize.regular")
+        case .large:      lang.t("settings.display.fontSize.large")
+        case .extraLarge: lang.t("settings.display.fontSize.extraLarge")
+        }
     }
 }
 

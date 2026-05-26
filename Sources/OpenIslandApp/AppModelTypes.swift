@@ -63,6 +63,32 @@ struct IslandAppearancePreferences: Equatable, Sendable {
     var completedStaleThreshold: IslandCompletedStaleThreshold = .fiveMinutes
 }
 
+enum IslandFontSize: String, CaseIterable, Identifiable, Sendable {
+    case small
+    case regular
+    case large
+    case extraLarge
+
+    var id: String { rawValue }
+
+    var scale: CGFloat {
+        switch self {
+        case .small:      0.92
+        case .regular:    1.0
+        case .large:      1.12
+        case .extraLarge: 1.24
+        }
+    }
+}
+
+enum OverlayLayoutModePreference: String, CaseIterable, Identifiable, Sendable {
+    case automatic
+    case externalDisplay
+    case macOSNotch
+
+    var id: String { rawValue }
+}
+
 enum IslandUsageDisplay: String, CaseIterable, Identifiable, Sendable {
     case hidden
     case compact

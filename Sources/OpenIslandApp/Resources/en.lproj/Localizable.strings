@@ -117,6 +117,17 @@
 /* Settings - Display */
 "settings.display.monitor" = "Monitor";
 "settings.display.position" = "Display Position";
+"settings.display.allDisplays" = "All displays";
+"settings.display.layoutModePreference" = "Layout Mode";
+"settings.display.layoutMode.automatic" = "Automatic";
+"settings.display.layoutMode.external" = "External display";
+"settings.display.layoutMode.notch" = "macOS notch";
+"settings.display.typography" = "Typography";
+"settings.display.fontSize" = "Font size";
+"settings.display.fontSize.small" = "Small";
+"settings.display.fontSize.regular" = "Regular";
+"settings.display.fontSize.large" = "Large";
+"settings.display.fontSize.extraLarge" = "XL";
 "settings.display.diagnostics" = "Diagnostics";
 "settings.display.currentScreen" = "Current Screen";
 "settings.display.layoutMode" = "Layout Mode";

@@ -2,6 +2,7 @@ import AppKit
 
 struct OverlayDisplayOption: Identifiable, Equatable {
     static let automaticID = "automatic"
+    static let allDisplaysID = "all-displays"
 
     let id: String
     let title: String
@@ -60,28 +61,43 @@ enum OverlayDisplayResolver {
     static let defaultPanelSize = NSSize(width: 708, height: 514)
 
     static func availableDisplayOptions() -> [OverlayDisplayOption] {
-        NSScreen.screens.map { screen in
+        let displayOptions = NSScreen.screens.map { screen in
             OverlayDisplayOption(
                 id: screenID(for: screen),
                 title: screen.localizedName,
                 subtitle: "\(screenKindDescription(for: screen)) · \(Int(screen.frame.width))×\(Int(screen.frame.height))"
             )
         }
+        guard displayOptions.count > 1 else {
+            return displayOptions
+        }
+        return [
+            OverlayDisplayOption(
+                id: OverlayDisplayOption.allDisplaysID,
+                title: "All displays",
+                subtitle: "Show an island on every connected display"
+            ),
+        ] + displayOptions
     }
 
-    static func diagnostics(preferredScreenID: String?, panelSize: NSSize) -> OverlayPlacementDiagnostics? {
+    static func diagnostics(
+        preferredScreenID: String?,
+        panelSize: NSSize,
+        layoutModePreference: OverlayLayoutModePreference = .automatic
+    ) -> OverlayPlacementDiagnostics? {
         guard let resolvedScreen = resolveScreen(preferredScreenID: preferredScreenID) else {
             return nil
         }
 
         let screen = resolvedScreen.screen
-        let overlayFrame = frame(for: screen, panelSize: panelSize)
+        let placementMode = placementMode(for: screen, preference: layoutModePreference)
+        let overlayFrame = frame(for: screen, panelSize: panelSize, placementMode: placementMode)
 
         return OverlayPlacementDiagnostics(
             targetScreenID: screenID(for: screen),
             targetScreenName: screen.localizedName,
             selectionSummary: resolvedScreen.selectionSummary,
-            mode: placementMode(for: screen),
+            mode: placementMode,
             screenFrame: screen.frame,
             visibleFrame: screen.visibleFrame,
             safeAreaInsets: screen.safeAreaInsets,
@@ -89,13 +105,43 @@ enum OverlayDisplayResolver {
         )
     }
 
-    private static func frame(for screen: NSScreen, panelSize: NSSize) -> NSRect {
+    static func frame(
+        for screen: NSScreen,
+        panelSize: NSSize,
+        layoutModePreference: OverlayLayoutModePreference
+    ) -> NSRect {
+        frame(
+            for: screen,
+            panelSize: panelSize,
+            placementMode: placementMode(for: screen, preference: layoutModePreference)
+        )
+    }
+
+    static func placementMode(
+        for screen: NSScreen,
+        preference: OverlayLayoutModePreference
+    ) -> OverlayPlacementMode {
+        switch preference {
+        case .automatic:
+            return placementMode(for: screen)
+        case .externalDisplay:
+            return .topBar
+        case .macOSNotch:
+            return .notch
+        }
+    }
+
+    private static func frame(
+        for screen: NSScreen,
+        panelSize: NSSize,
+        placementMode: OverlayPlacementMode
+    ) -> NSRect {
         let width = min(panelSize.width, screen.visibleFrame.width - 64)
         let height = panelSize.height
         let x = screen.frame.midX - (width / 2)
 
         let y: CGFloat
-        switch placementMode(for: screen) {
+        switch placementMode {
         case .notch:
             y = screen.frame.maxY - height
         case .topBar:

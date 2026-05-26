@@ -23,6 +23,7 @@ final class AppModel {
     private static let showCodexUsageDefaultsKey = "app.showCodexUsage"
     private static let completionReplyEnabledDefaultsKey = "feature.completionReply.enabled"
     private static let suppressFrontmostNotificationsDefaultsKey = "app.suppressFrontmostNotifications"
+    private static let islandFontSizeDefaultsKey = "appearance.island.fontSize"
     private static let legacyIslandSessionStateIndicatorDefaultsKey = "appearance.island.v8.stateIndicator"
     private static let legacyIslandSessionGroupDefaultsKey = "appearance.island.v8.sessionGroup"
     private static let legacyIslandSessionSortDefaultsKey = "appearance.island.v8.sessionSort"
@@ -247,6 +248,17 @@ final class AppModel {
     var overlayDisplaySelectionID: String {
         get { overlay.overlayDisplaySelectionID }
         set { overlay.overlayDisplaySelectionID = newValue }
+    }
+    var overlayLayoutModePreference: OverlayLayoutModePreference {
+        get { overlay.overlayLayoutModePreference }
+        set { overlay.overlayLayoutModePreference = newValue }
+    }
+    var islandFontSize: IslandFontSize = .regular {
+        didSet {
+            guard hasFinishedInit, islandFontSize != oldValue else { return }
+            UserDefaults.standard.set(islandFontSize.rawValue, forKey: Self.islandFontSizeDefaultsKey)
+            refreshOverlayPlacementIfVisible()
+        }
     }
 
     // MARK: - Appearance
@@ -477,6 +489,9 @@ final class AppModel {
         showDockIcon = UserDefaults.standard.bool(forKey: Self.showDockIconDefaultsKey)
         hapticFeedbackEnabled = UserDefaults.standard.bool(forKey: Self.hapticFeedbackEnabledDefaultsKey)
         suppressFrontmostNotifications = UserDefaults.standard.bool(forKey: Self.suppressFrontmostNotificationsDefaultsKey)
+        islandFontSize = IslandFontSize(
+            rawValue: UserDefaults.standard.string(forKey: Self.islandFontSizeDefaultsKey) ?? ""
+        ) ?? .regular
         if UserDefaults.standard.object(forKey: Self.showCodexUsageDefaultsKey) != nil {
             showCodexUsage = UserDefaults.standard.bool(forKey: Self.showCodexUsageDefaultsKey)
         } else {
@@ -491,6 +506,7 @@ final class AppModel {
         topBarAppearancePreferences = Self.loadAppearancePreferences(for: .topBar)
         overlay.appModel = self
         overlay.restoreDisplayPreference()
+        overlay.restoreLayoutModePreference()
         overlay.onStatusMessage = { [weak self] message in
             self?.lastActionMessage = message
         }

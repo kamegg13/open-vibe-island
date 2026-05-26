@@ -117,6 +117,17 @@
 /* Settings - Display */
 "settings.display.monitor" = "显示器";
 "settings.display.position" = "显示位置";
+"settings.display.allDisplays" = "所有显示器";
+"settings.display.layoutModePreference" = "布局模式";
+"settings.display.layoutMode.automatic" = "自动";
+"settings.display.layoutMode.external" = "外接屏";
+"settings.display.layoutMode.notch" = "macOS 刘海";
+"settings.display.typography" = "字体";
+"settings.display.fontSize" = "字体大小";
+"settings.display.fontSize.small" = "小";
+"settings.display.fontSize.regular" = "默认";
+"settings.display.fontSize.large" = "大";
+"settings.display.fontSize.extraLarge" = "超大";
 "settings.display.diagnostics" = "诊断";
 "settings.display.currentScreen" = "当前屏幕";
 "settings.display.layoutMode" = "布局模式";
