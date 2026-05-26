@@ -110,7 +110,7 @@ struct IslandPanelView: View {
     @State private var openedSurfaceMountGeneration: UInt64 = 0
 
     private var isOpened: Bool {
-        model.notchStatus == .opened
+        effectiveNotchStatus == .opened
     }
 
     private var usesOpenedVisualState: Bool {
@@ -122,7 +122,27 @@ struct IslandPanelView: View {
     }
 
     private var isPopping: Bool {
-        model.notchStatus == .popping
+        effectiveNotchStatus == .popping
+    }
+
+    private var effectiveNotchStatus: NotchStatus {
+        guard model.notchStatus == .opened else {
+            return model.notchStatus
+        }
+        guard let activeOverlayScreenID = model.activeOverlayScreenID else {
+            return model.notchStatus
+        }
+        return activeOverlayScreenID == panelScreenID ? .opened : .closed
+    }
+
+    private var panelScreenID: String? {
+        if let displayOverrideScreenID {
+            return displayOverrideScreenID
+        }
+        if let targetScreenID = model.overlayPlacementDiagnostics?.targetScreenID {
+            return targetScreenID
+        }
+        return targetOverlayScreen.map { screenID(for: $0) }
     }
 
     /// Single animation selection based on the current notch status.
@@ -198,9 +218,9 @@ struct IslandPanelView: View {
             Text(model.lang.t("island.quit.confirmMessage"))
         }
         .onAppear {
-            syncOpenedSurfaceMount(with: model.notchStatus, immediate: true)
+            syncOpenedSurfaceMount(with: effectiveNotchStatus, immediate: true)
         }
-        .onChange(of: model.notchStatus) { _, status in
+        .onChange(of: effectiveNotchStatus) { _, status in
             syncOpenedSurfaceMount(with: status)
         }
         .environment(\.islandFontScale, model.islandFontSize.scale)
@@ -265,7 +285,7 @@ struct IslandPanelView: View {
 
             DispatchQueue.main.asyncAfter(deadline: .now() + openedSurfaceUnmountDelay) {
                 guard openedSurfaceMountGeneration == generation,
-                      model.notchStatus != .opened else {
+                      effectiveNotchStatus != .opened else {
                     return
                 }
                 keepsOpenedSurfaceMounted = false

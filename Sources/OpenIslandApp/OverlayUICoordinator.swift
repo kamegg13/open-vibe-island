@@ -16,6 +16,7 @@ final class OverlayUICoordinator {
 
     var overlayDisplayOptions: [OverlayDisplayOption] = []
     var overlayPlacementDiagnostics: OverlayPlacementDiagnostics?
+    var activeOverlayScreenID: String?
 
     var overlayDisplaySelectionID = OverlayDisplayOption.automaticID {
         didSet {
@@ -194,12 +195,18 @@ final class OverlayUICoordinator {
         overlayPanelController.setInteractive(interactive)
 
         if status == .opened, let appModel {
+            if activeOverlayScreenID == nil {
+                activeOverlayScreenID = preferredOverlayScreenID
+            }
             overlayPlacementDiagnostics = overlayPanelController.show(
                 model: appModel,
                 preferredScreenID: preferredOverlayScreenID,
                 showsOnAllDisplays: showsOverlayOnAllDisplays,
                 layoutModePreference: overlayLayoutModePreference
             )
+            activeOverlayScreenID = activeOverlayScreenID ?? overlayPlacementDiagnostics?.targetScreenID
+        } else if status == .closed {
+            activeOverlayScreenID = nil
         }
 
         afterStateChange?()
